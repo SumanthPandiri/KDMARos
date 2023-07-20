@@ -2,7 +2,7 @@ from typing import Callable, Sequence
 
 import numpy
 import math
-from .scenarios import BaseScenario
+from .scenarios import rosScenario
 from .agents.base_agent import BaseAgent
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ import config
 class DecentralizedMultiAgentEnv():
 
     def __init__(self,
-        scenario: BaseScenario,
+        scenario: rosScenario,
         fps: int = 30,
         frame_skip: int = 1,
         timeout: int=None, 

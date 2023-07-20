@@ -2,7 +2,7 @@ from functools import partial
 import os, time
 import torch
 
-from env.scenarios import *
+from env.scenarios import  rosScenario
 from models.networks import ExpertNetwork
 from models.env import Env
 from models.agent import DLAgent
@@ -11,7 +11,7 @@ import config
 
 import rclpy
 import pubsub
-from pubsub import kdmaPublisher, rosbagSubscriber
+from pubsub import kdmaPublisher, rosbagSubscriber, goalSubscriber
 
 
 
@@ -19,60 +19,16 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--ckpt", type=str, default=None)
 parser.add_argument("--max_trials", type=int, default=50)
-parser.add_argument("--scene", type=str, default="1-circle",
-    choices=["1-circle", "2-circle", "3-circle", "4-circle", "6-circle", "12-circle", "20-circle", "24-circle", "20-corridor", "24-corridor", "20-square", "24-square"]
-)
+parser.add_argument("--num_neighbors", type=int, default=1)
 parser.add_argument("--device", type=str, default=None)
 parser.add_argument("--visualize", type=bool, default=False)
 settings = parser.parse_args()
 
-def env_wrapper(model, expert=None):
-    agent_wrapper = partial(DLAgent,
-        preferred_speed=config.PREFERRED_SPEED, max_speed=config.MAX_SPEED,
-        radius=config.AGENT_RADIUS, observe_radius=config.NEIGHBORHOOD_RADIUS,
-        expert=expert, model=model
-        )
-    
-    if settings.scene == "1-circle":
-        scenario = CircleCrossingScenario(n_agents=1, agent_wrapper=agent_wrapper, min_distance=0.3, radius=4)
-    elif settings.scene == "2-circle":
-        scenario = CircleCrossingScenario(n_agents=2, agent_wrapper=agent_wrapper, min_distance=0.3, radius=4)
-    elif settings.scene == "3-circle":
-        scenario = CircleCrossingScenario(n_agents=3, agent_wrapper=agent_wrapper, min_distance=0.3, radius=4)
-    elif settings.scene == "4-circle":
-        scenario = CircleCrossingScenario(n_agents=4, agent_wrapper=agent_wrapper, min_distance=0.3, radius=4)
-    elif settings.scene == "6-circle": 
-        scenario = CircleCrossing6Scenario(agent_wrapper=agent_wrapper)
-    elif settings.scene == "12-circle":
-        scenario = CircleCrossing12Scenario(agent_wrapper=agent_wrapper)
-    elif settings.scene == "20-circle":
-        scenario = CircleCrossingScenario(n_agents=20, agent_wrapper=agent_wrapper, min_distance=0.3, radius=4)
-    elif settings.scene == "24-circle":
-        scenario = CircleCrossingScenario(n_agents=24, agent_wrapper=agent_wrapper, min_distance=0.3, radius=4)
-    elif settings.scene == "20-square":
-        scenario = SquareCrossingScenario(n_agents=20, agent_wrapper=agent_wrapper, min_distance=0.3, vertical=True, horizontal=True, width=8, height=8)
-    elif settings.scene == "24-square":
-        scenario = SquareCrossingScenario(n_agents=24, agent_wrapper=agent_wrapper, min_distance=0.3, vertical=True, horizontal=True, width=8, height=8)
-    elif settings.scene == "20-corridor":
-        scenario = CompositeScenarios([
-            SquareCrossingScenario(n_agents=20, agent_wrapper=agent_wrapper, min_distance=0.3, vertical=True, horizontal=False, width=8, height=8),
-            SquareCrossingScenario(n_agents=20, agent_wrapper=agent_wrapper, min_distance=0.3, vertical=False, horizontal=True, width=8, height=8)
-        ])
-    elif settings.scene == "24-corridor":
-        scenario = CompositeScenarios([
-            SquareCrossingScenario(n_agents=24, agent_wrapper=agent_wrapper, min_distance=0.3, vertical=True, horizontal=False, width=8, height=8),
-            SquareCrossingScenario(n_agents=24, agent_wrapper=agent_wrapper, min_distance=0.3, vertical=False, horizontal=True, width=8, height=8)
-        ])    
-    else:
-        raise ValueError("Unrecognized scene: {}".format(settings.scene))
-    env = Env(scenario=scenario, fps=1./config.STEP_TIME, timeout=config.VISUALIZATION_TIMEOUT, frame_skip=config.FRAME_SKIP,
-        view=settings.visualize, numNeighbors = scenario.n_agents-1
-    )
-    return env
 
 def evaluate(ckpt_file):
+    #Load in the model
     print(ckpt_file)
-    print(settings.scene)
+    #print(settings.scene)
 
     ckpt = torch.load(ckpt_file, map_location="cpu")
     state_dict = {}
@@ -87,16 +43,43 @@ def evaluate(ckpt_file):
         device = settings.device
     model.to(device)
 
-    env = env_wrapper(model)
-    env.seed(0)
-    model.eval()
-
+    
+    #Set up the publisher
     rclpy.init()
-    numNeighbors = env.scenario.n_agents - 1
     kdma_Publisher = kdmaPublisher()
+
+    #Set up the subscribers for the neighbors and robot, and get initial positions (first is robot)
+    numNeighbors = settings.num_neighbors
     rosbag_subscriber = []
+    # posVel = []
     for x in range(numNeighbors):
         rosbag_subscriber.append(rosbagSubscriber('odometry/controller_' + str(x+1)))
+    #     rclpy.spin_once(rosbag_subscriber[x])
+    #     posVel.append([rosbag_subscriber[x].posx, rosbag_subscriber[x].posy, \
+    #                 rosbag_subscriber[x].velx, rosbag_subscriber[x].vely])
+
+    #Set up a goal subscriber and get the goal published
+    # goal_Subscriber = goal_Subscriber('/move_base_simple/goal')
+    # rclpy.spin_once(goal_Subscriber)
+    # goalx, goaly = goal_Subscriber.posx, goal_Subscriber.posy
+
+    goalList = [2.,2.]
+    posVel = [[2.,0.],[3.,3.],[0.,2.]]
+
+    agent_wrapper = partial(DLAgent,
+        preferred_speed=config.PREFERRED_SPEED, max_speed=config.MAX_SPEED,
+        observe_radius=config.NEIGHBORHOOD_RADIUS,
+        expert=None, model=model
+        )
+    scenario = rosScenario(n_agents=numNeighbors+1, agent_wrapper=agent_wrapper, \
+                           agent_goal=goalList, pos_vel=posVel)
+    
+    env = Env(scenario=scenario, fps=1./config.STEP_TIME, timeout=config.VISUALIZATION_TIMEOUT, \
+            frame_skip=config.FRAME_SKIP, view=settings.visualize, numNeighbors = scenario.n_agents-1
+    )
+
+    model.eval()
+    
 
     done, info = True, None
     trials = 0
@@ -115,6 +98,11 @@ def evaluate(ckpt_file):
             if ag in env.info["neighbors"]:
                 act.append((0,0))
                 continue
+            #rclpy.spin_once(goal_Subscriber)
+            #goalList = [goal_Subscriber.posx, goal_Subscriber.posy]
+            #print(ag.goal)
+
+            #ag.goal = 0, 0
             act.append(ag.act(s,env))
 
         linvel, angvel = act[0]
@@ -122,7 +110,7 @@ def evaluate(ckpt_file):
         kdma_Publisher.publishVel(linvel, angvel)
 
         n = []
-        for x in range(numNeighbors):
+        for x in range(numNeighbors ):
             rclpy.spin_once(rosbag_subscriber[x])
             n.append([rosbag_subscriber[x].posx, rosbag_subscriber[x].posy, \
                       rosbag_subscriber[x].velx, rosbag_subscriber[x].vely])
