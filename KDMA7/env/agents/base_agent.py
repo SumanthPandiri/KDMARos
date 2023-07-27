@@ -23,7 +23,6 @@ class BaseAgent():
 
         self.radius = radius 
         self.visible = visible
-
         self.observe_angle = math.pi*2
         self.observe_radius = observe_radius
         self._lin_vel = 0

@@ -48,9 +48,9 @@ class DecentralizedMultiAgentEnv():
         
         self.simulation_steps = 0
         self.info = dict(collided_agents=set(), arrived_agents=set(), neighbors = [])
-        for n in range(self.numNeighbors):
-            
-            self.info['neighbors'].append(self.agents[n+1])
+        if self.numNeighbors > 0:
+            for n in range(self.numNeighbors):
+                self.info['neighbors'].append(self.agents[n+1]) # first one is the agent
 
         for i in range(min(len(self.trajectories), len(self.markers))):
             self.trajectories[i][0].clear()
@@ -90,68 +90,88 @@ class DecentralizedMultiAgentEnv():
                 else:
                     agent._lin_vel, agent._ang_vel = a
 
-        for _ in range(self.frame_skip):
-            for agent in self.agents:
-                if agent in self.info["collided_agents"]: continue
-                if agent in self.info["arrived_agents"]: continue
+        # for _ in range(self.frame_skip):
+        for agent in self.agents:
+            if agent in self.info["collided_agents"]: continue
+            if agent in self.info["arrived_agents"]: continue
+            robot = True
+            if self.numNeighbors > 0:
                 for i in range(len(self.info['neighbors'])):
                     if agent==self.info['neighbors'][i]: 
-                        agent.position = n[i][0], n[i][1]
-                        agent.velocity = n[i][2], n[i][3]
-                        continue
-               
-                    
-                dist2 = (agent.position.x - agent.goal.x)**2 + (agent.position.y - agent.goal.y)**2
-                if dist2 <= agent.radius*agent.radius:
-                    self.info["arrived_agents"].add(agent)
-                    continue
+                        agent.position = n[i+1][0], n[i+1][1]
+                        agent.velocity = n[i+1][2], n[i+1][3]
+                        robot = False
+                        break
+            
+            if robot == True:
+                agent.position = n[0][0], n[0][1]
+                agent.velocity = n[0][2], n[0][3]
+                agent._orientation = n[0][4]
+                agent.goal = n[0][5], n[0][6]
+            
                 
-                if config.ACC == True:
-                    agent._lin_vel += agent._lin_acc * self.step_time
-                    agent._ang_vel += agent._ang_acc * self.step_time
-                    
-                # if agent._ang_vel > numpy.pi:
-                #     agent._ang_vel -= numpy.pi*2
-                # elif agent._ang_vel < -numpy.pi:
-                #     agent._ang_vel += numpy.pi*2
-                #agent._orientation = numpy.arctan2(agent.velocity.y, agent.velocity.x)
-                agent._orientation = agent._ang_vel*self.step_time + agent._orientation
-                agent.velocity = numpy.cos(agent._orientation)*agent._lin_vel, \
-                    numpy.sin(agent._orientation)*agent._lin_vel
+            dist2 = (agent.position.x - agent.goal.x)**2 + (agent.position.y - agent.goal.y)**2
+            if dist2 <= agent.radius*agent.radius and agent not in self.info['neighbors']:
+                self.info["arrived_agents"].add(agent)
+                print("arrived")
+                continue
+            
+            # if config.ACC == True:
+            #     agent._lin_vel += agent._lin_acc * self.step_time
+            #     agent._ang_vel += agent._ang_acc * self.step_time
+                
+            # # if agent._ang_vel > numpy.pi:
+            # #     agent._ang_vel -= numpy.pi*2
+            # # elif agent._ang_vel < -numpy.pi:
+            # #     agent._ang_vel += numpy.pi*2
+            # #agent._orientation = numpy.arctan2(agent.velocity.y, agent.velocity.x)
+            # agent._orientation = agent._ang_vel*self.step_time + agent._orientation
+            # agent.velocity = numpy.cos(agent._orientation)*agent._lin_vel, \
+            #     numpy.sin(agent._orientation)*agent._lin_vel
 
-                agent.position = \
-                    agent.position.x+agent.velocity.x*self.step_time, \
-                    agent.position.y+agent.velocity.y*self.step_time                    
-            for i in range(len(self.agents)):
-                for j in range(i+1, len(self.agents)):
-                    if self.scenario.collide(self.agents[i], self.agents[j]):
-                        self.info["collided_agents"].add(self.agents[i])
-                        self.info["collided_agents"].add(self.agents[j])
-                        self.agents[i].velocity = 0., 0.
-                        self.agents[j].velocity = 0., 0.
-            if self.view:
-                self.render(None if type(self.view) == bool else self.view)
+            # agent.position = \
+            #     agent.position.x+agent.velocity.x*self.step_time, \
+            #     agent.position.y+agent.velocity.y*self.step_time                    
+        for i in range(len(self.agents)):
+            for j in range(i+1, len(self.agents)):
+                if self.scenario.collide(self.agents[i], self.agents[j]):
+                    self.info["collided_agents"].add(self.agents[i])
+                    self.info["collided_agents"].add(self.agents[j])
+                    self.agents[i].velocity = 0., 0.
+                    self.agents[j].velocity = 0., 0.
+        if self.view:
+            self.render(None if type(self.view) == bool else self.view)
         # for agent in self.agents:
         #     if agent in self.info["collided_agents"]: continue
         #     dist2 = (agent.position.x - agent.goal.x)**2 + (agent.position.y - agent.goal.y)**2
         #     if dist2 <= agent.radius*agent.radius:
         #         self.info["arrived_agents"].add(agent)
         
+        ###
         obs = self.observe()
         rews = [self.reward(i, agent) for i, agent in enumerate(self.agents)]
         
-        if len(self.info["collided_agents"]) + len(self.info["arrived_agents"]) < len(self.agents):
-            terminal = False
-        else:
-            terminal = True
-            for agent in self.agents:
-                if agent not in self.info["collided_agents"] and agent not in self.info["arrived_agents"]:
-                    terminal = False
+        # if len(self.info["collided_agents"]) + len(self.info["arrived_agents"]) < len(self.agents):
+        #     terminal = False
+        # else:
+        #     terminal = True
+        #     for agent in self.agents:
+        #         if agent not in self.info["collided_agents"] and agent not in self.info["arrived_agents"]:
+        #             terminal = False
+        #             break
+        # if not terminal and self.timeout and self.simulation_steps >= self.timeout:
+        #     self.info["TimeLimit.truncated"] = True
+        #     terminal = True
+        terminal = False
+        for agent in self.agents:
+                if agent in self.info["arrived_agents"]:
+                    terminal = True
                     break
-        
-        if not terminal and self.timeout and self.simulation_steps >= self.timeout:
-            self.info["TimeLimit.truncated"] = True
-            terminal = True
+                if agent in self.info["collided_agents"]:
+                    print("COLLIDED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    break
+
+
 
         if self.view:
             if terminal == True:
@@ -315,6 +335,6 @@ class DecentralizedMultiAgentEnv():
 
 
         fig.canvas.draw()
-        if self.term == True and self.simulation_steps != 0:
-            fig.savefig("images/img"+str(self.imgnum))
-            self.imgnum+=1
+        # if self.term == True and self.simulation_steps != 0:
+        #     fig.savefig("images/img"+str(self.imgnum))
+        #     self.imgnum+=1

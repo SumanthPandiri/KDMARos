@@ -8,13 +8,11 @@ class rosScenario():
     def __init__(self,
         n_agents: int or Tuple[int, int],
         agent_wrapper: Callable[[], BaseAgent],
-        agent_goal: list,
-        pos_vel:list
+        info: list
     ):
+        self.info = info
         self.n_agents = n_agents
         self.agent_wrapper = agent_wrapper
-        self.agent_goal = agent_goal
-        self.pos_vel = pos_vel
         super().__init__()
     
     def collide(self, agent0: BaseAgent, agent1: BaseAgent):
@@ -41,9 +39,11 @@ class rosScenario():
         agent = self.agent_wrapper()
 
         if self.counter == 0:
-            agent.goal = self.agent_goal[0], self.agent_goal[1]
+            agent.goal = self.info[self.counter][5], self.info[self.counter][6]
     
-        agent.position = self.pos_vel[self.counter][0], self.pos_vel[self.counter][1]
+        agent.position = self.info[self.counter][0], self.info[self.counter][1]
+        agent.velocity = self.info[self.counter][2], self.info[self.counter][3]
+        agent._orientation = self.info[self.counter][4]
 
         return agent
     
