@@ -30,7 +30,6 @@ def eulerFromQuaternion(quaternion):
 
 
 class robotPub(Node):
-
     def __init__(self, model, settings, ckpt_file):
         super().__init__('robotPub')
         self.model = model
@@ -44,7 +43,6 @@ class robotPub(Node):
         self.goalSub
         self.done=False
         self.heading = []
-
 
         self.subTopicList = ['odometry/controller_1']
         for i in range(1,self.numNeighbors+1):
@@ -66,7 +64,6 @@ class robotPub(Node):
         timer_period = 0.01 # seconds
         self.timer = self.create_timer(timer_period, self.actPub)
         self.i = 0
-
 
 
     def goalCb(self, msg):
@@ -92,9 +89,6 @@ class robotPub(Node):
         else:
             self.info[i] = [posx, posy, velx, vely, ori]
             self.infoRec[i] = True
-
-        #self.get_logger().info('I heard: "%s"' % str(i))
-
 
 
     def actPub(self):
@@ -123,18 +117,15 @@ class robotPub(Node):
             self.envCreated = True
             self.state = self.env.reset()
 
-
             if self.settings.visualize:
                 self.env.figure.axes.set_title(os.path.join(os.path.basename(os.path.dirname(self.ckpt_file)), \
             os.path.basename(self.ckpt_file)))
 
-        
         act = []
         for ag, s in zip(self.env.agents,self.state):
             if ag in self.env.info["neighbors"]:
                 act.append((0,0))
                 continue
-
             act.append(ag.act(s,self.env))
 
         linvel, angvel = act[0]
@@ -143,7 +134,6 @@ class robotPub(Node):
         msg.linear.x = linvel
         msg.angular.z = angvel
         self.publisher.publish(msg)
-        #print(act)
         msg = [linvel, angvel]
         self.get_logger().info('Publishing: "%s"' % msg)
         self.i += 1
@@ -152,7 +142,6 @@ class robotPub(Node):
         self.state, rews, self.done, info = self.env.step(act, self.info)
         if self.done:
             print("GOAL HAS BEEN REACHED")
-
             self.goalRec = False
             self.envCreated = False
             return
