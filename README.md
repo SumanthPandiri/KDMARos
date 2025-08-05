@@ -3,5 +3,5 @@ Developed during my REU in Summer 2023, this is my ROS2 implementation of my [KD
 
 Known issue: Nonfluid movements and imperfections in KDMA Differential Drive Policy
 
-See KDMA Repo [Here]([url](https://github.com/SumanthPandiri/KDMA))
+See KDMA Repo [here](https://github.com/SumanthPandiri/KDMA).
 
